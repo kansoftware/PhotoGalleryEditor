@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtGui import QAction, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
     QGridLayout,
@@ -26,12 +26,13 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from src.db import ImageRecord, SessionLocal
@@ -106,6 +107,7 @@ class MainWindow(QMainWindow):
         self.cluster_images: List[ImageRecord] = []
 
         self.init_ui()
+        self.init_menu()
         self.load_clusters()
 
     def init_ui(self) -> None:
@@ -113,6 +115,8 @@ class MainWindow(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
+
+        self.setMenuBar(self.menuBar()) # Создаем menuBar
 
         # Панель слева: Список кластеров
         left_layout = QVBoxLayout()
@@ -150,6 +154,30 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(left_layout, 1)
         main_layout.addLayout(right_layout, 3)
 
+    def init_menu(self) -> None:
+        """Инициализирует меню приложения."""
+        menu_bar = self.menuBar()
+        commands_menu = menu_bar.addMenu("Команды")
+
+        # 1. Отменить все изменения
+        action_revert = QAction("Отменить все изменения", self)
+        action_revert.triggered.connect(self.action_revert_all_changes)
+        commands_menu.addAction(action_revert)
+
+        # 2. Удалить все помеченные файлы
+        action_delete = QAction("Удалить все помеченные файлы", self)
+        action_delete.triggered.connect(self.action_delete_marked_files)
+        if self.readonly:
+            action_delete.setEnabled(False)
+        commands_menu.addAction(action_delete)
+
+        commands_menu.addSeparator()
+
+        # 3. Закрыть
+        action_close = QAction("Закрыть", self)
+        action_close.triggered.connect(self.close)
+        commands_menu.addAction(action_close)
+ 
     def load_clusters(self) -> None:
         """Загружает из БД список кластеров, требующих разбора."""
         stmt = (
@@ -300,7 +328,73 @@ class MainWindow(QMainWindow):
         self.btn_keep_first.setEnabled(False)
         self.btn_ignore.setEnabled(False)
 
+    def action_revert_all_changes(self) -> None:
+        """Отменяет все пометки `to_delete` во всей базе."""
+        if self.readonly:
+            QMessageBox.warning(self, "Режим чтения", "Нельзя вносить изменения.")
+            return
 
+        stmt = update(ImageRecord).values(to_delete=False, reviewed=False)
+        self.session.execute(stmt)
+        self.session.commit()
+
+        # Обновляем вид кнопок в текущем кластере, если он выбран
+        if self.current_cluster_id is not None:
+            self.load_cluster_images(self.current_cluster_id)
+
+        QMessageBox.information(
+            self, "Готово", "Все пометки 'к удалению' и 'просмотрено' были сняты."
+        )
+        self.load_clusters()  # Обновляем список кластеров
+
+    def action_delete_marked_files(self) -> None:
+        """Переименовывает все файлы, помеченные к удалению."""
+        if self.readonly:
+            QMessageBox.warning(self, "Режим чтения", "Нельзя удалять файлы.")
+            return
+
+        stmt = select(ImageRecord).where(ImageRecord.to_delete.is_(True))
+        records_to_delete = list(self.session.execute(stmt).scalars().all())
+
+        if not records_to_delete:
+            QMessageBox.information(self, "Нечего удалять", "Нет файлов, помеченных к удалению.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            (
+                f"Вы уверены, что хотите переименовать {len(records_to_delete)} файлов,"
+                " добавив суффикс '_deleted'?"
+            ),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            deleted_count = 0
+            errors = []
+            for rec in records_to_delete:
+                try:
+                    p = Path(rec.path)
+                    new_path = p.with_suffix(p.suffix + "._deleted")
+                    if p.exists():
+                        p.rename(new_path)
+                        rec.path = str(new_path)
+                        deleted_count += 1
+                except Exception as e:
+                    errors.append(f"Не удалось переименовать {rec.path}: {e}")
+            
+            self.session.commit()
+            
+            msg = f"Переименовано {deleted_count} файлов."
+            if errors:
+                msg += "\n\nОшибки:\n" + "\n".join(errors)
+            
+            QMessageBox.information(self, "Отчет", msg)
+            self.load_clusters() # Обновляем список кластеров
+
+ 
 def run_gui(readonly: bool) -> None:
     """
     Запускает GUI-приложение для разбора дубликатов.
