@@ -33,6 +33,7 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QVBoxLayout,
     QWidget,
+    QDialog,
 )
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -78,6 +79,57 @@ class ImageLoader(QThread):
                     self.loaded.emit(idx, path_str, pix)
 
 
+class ImageViewer(QDialog):
+    """
+    Диалоговое окно для просмотра одного изображения.
+
+    Масштабирует изображение для заполнения окна с сохранением пропорций.
+    """
+
+    def __init__(self, image_path: str, parent=None):
+        super().__init__(parent)
+        self.image_path = image_path
+        self.pixmap = QPixmap(image_path)
+
+        self.setWindowTitle(f"Просмотр: {Path(image_path).name}")
+        layout = QVBoxLayout(self)
+        self.setLayout(layout)
+
+        self.image_label = QLabel()
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.image_label)
+
+        if self.pixmap.isNull():
+            self.image_label.setText("Не удалось загрузить изображение.")
+        else:
+            # Начальный размер
+            # Начальный размер с ограничением
+            initial_size = self.pixmap.size()
+            if max(initial_size.width(), initial_size.height()) > 900:
+                initial_size = initial_size.scaled(
+                    900, 900, Qt.AspectRatioMode.KeepAspectRatio
+                )
+            self.resize(initial_size)
+            self.update_pixmap()
+
+    def resizeEvent(self, a0) -> None:
+        """Перерисовывает изображение при изменении размера окна."""
+        self.update_pixmap()
+        super().resizeEvent(a0)
+
+    def update_pixmap(self) -> None:
+        """Масштабирует QPixmap до размера QLabel."""
+        if self.pixmap.isNull():
+            return
+
+        scaled_pixmap = self.pixmap.scaled(
+            self.image_label.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.image_label.setPixmap(scaled_pixmap)
+
+
 class ImageLabel(QLabel):
     """
     QLabel с поддержкой контекстного меню для действий с изображением.
@@ -86,9 +138,10 @@ class ImageLabel(QLabel):
     в `MainWindow` для отображения меню.
     """
 
-    def __init__(self, record_id: int, parent_window: "MainWindow", *args, **kwargs):
+    def __init__(self, record_id: int, image_path: str, parent_window: "MainWindow", *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.record_id = record_id
+        self.image_path = image_path
         self.parent_window = parent_window
         # Включаем политику контекстного меню для вызова по сигналу
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -96,34 +149,45 @@ class ImageLabel(QLabel):
 
     def show_context_menu(self, pos) -> None:
         """Создает и отображает контекстное меню."""
-        if self.parent_window.readonly:
-            return
-
         menu = QMenu(self)
 
-        # Действие: Пометить на удаление
-        mark_action = QAction("Пометить на удаление", self)
-        mark_action.triggered.connect(lambda: self.parent_window.mark_for_deletion(self.record_id))
-        menu.addAction(mark_action)
-
-        # Действие: Снять пометку на удаление
-        unmark_action = QAction("Снять пометку на удаление", self)
-        unmark_action.triggered.connect(
-            lambda: self.parent_window.unmark_for_deletion(self.record_id)
-        )
-        menu.addAction(unmark_action)
-
+        # Действие: Показать в оригинальном размере
+        view_action = QAction("Показать в оригинальном размере", self)
+        view_action.triggered.connect(self.show_full_image)
+        menu.addAction(view_action)
         menu.addSeparator()
 
-        # Действие: Оставить это, удалить остальные
-        keep_this_action = QAction("Оставить это, остальные удалить", self)
-        keep_this_action.triggered.connect(
-            lambda: self.parent_window.keep_this_delete_others(self.record_id)
-        )
-        menu.addAction(keep_this_action)
+        if not self.parent_window.readonly:
+            # Действие: Пометить на удаление
+            mark_action = QAction("Пометить на удаление", self)
+            mark_action.triggered.connect(
+                lambda: self.parent_window.mark_for_deletion(self.record_id)
+            )
+            menu.addAction(mark_action)
+
+            # Действие: Снять пометку на удаление
+            unmark_action = QAction("Снять пометку на удаление", self)
+            unmark_action.triggered.connect(
+                lambda: self.parent_window.unmark_for_deletion(self.record_id)
+            )
+            menu.addAction(unmark_action)
+
+            menu.addSeparator()
+
+            # Действие: Оставить это, удалить остальные
+            keep_this_action = QAction("Оставить это, остальные удалить", self)
+            keep_this_action.triggered.connect(
+                lambda: self.parent_window.keep_this_delete_others(self.record_id)
+            )
+            menu.addAction(keep_this_action)
 
         # Показываем меню в глобальных координатах
         menu.exec(self.mapToGlobal(pos))
+
+    def show_full_image(self) -> None:
+        """Открывает диалоговое окно для просмотра полного изображения."""
+        viewer = ImageViewer(self.image_path, self.parent_window)
+        viewer.exec()
 
 
 class MainWindow(QMainWindow):
@@ -284,7 +348,9 @@ class MainWindow(QMainWindow):
             container = QWidget()
             vbox = QVBoxLayout(container)
 
-            lbl_img = ImageLabel(record_id=img_rec.id, parent_window=self)
+            lbl_img = ImageLabel(
+                record_id=img_rec.id, image_path=img_rec.path, parent_window=self
+            )
             lbl_img.setFixedSize(300, 300)
             lbl_img.setStyleSheet("border: 1px solid gray;")
             lbl_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
