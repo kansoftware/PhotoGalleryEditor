@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenu,
     QMenuBar,
     QMessageBox,
     QPushButton,
@@ -77,6 +78,54 @@ class ImageLoader(QThread):
                     self.loaded.emit(idx, path_str, pix)
 
 
+class ImageLabel(QLabel):
+    """
+    QLabel с поддержкой контекстного меню для действий с изображением.
+
+    Отправляет сигнал `customContextMenuRequested`, который будет обработан
+    в `MainWindow` для отображения меню.
+    """
+
+    def __init__(self, record_id: int, parent_window: "MainWindow", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.record_id = record_id
+        self.parent_window = parent_window
+        # Включаем политику контекстного меню для вызова по сигналу
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.show_context_menu)
+
+    def show_context_menu(self, pos) -> None:
+        """Создает и отображает контекстное меню."""
+        if self.parent_window.readonly:
+            return
+
+        menu = QMenu(self)
+
+        # Действие: Пометить на удаление
+        mark_action = QAction("Пометить на удаление", self)
+        mark_action.triggered.connect(lambda: self.parent_window.mark_for_deletion(self.record_id))
+        menu.addAction(mark_action)
+
+        # Действие: Снять пометку на удаление
+        unmark_action = QAction("Снять пометку на удаление", self)
+        unmark_action.triggered.connect(
+            lambda: self.parent_window.unmark_for_deletion(self.record_id)
+        )
+        menu.addAction(unmark_action)
+
+        menu.addSeparator()
+
+        # Действие: Оставить это, удалить остальные
+        keep_this_action = QAction("Оставить это, остальные удалить", self)
+        keep_this_action.triggered.connect(
+            lambda: self.parent_window.keep_this_delete_others(self.record_id)
+        )
+        menu.addAction(keep_this_action)
+
+        # Показываем меню в глобальных координатах
+        menu.exec(self.mapToGlobal(pos))
+
+
 class MainWindow(QMainWindow):
     """
     Основное окно приложения для просмотра дубликатов.
@@ -117,7 +166,6 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
 
-        # Этот вызов был удален, но он нужен. Восстановим его в правильном виде.
         self.setMenuBar(QMenuBar(self))
 
         # Панель слева: Список кластеров
@@ -162,26 +210,31 @@ class MainWindow(QMainWindow):
 
     def init_menu(self) -> None:
         """Инициализирует меню приложения."""
-        commands_menu = self.menuBar().addMenu("Команды")
+        menu = self.menuBar()
+        if not menu:
+            return  # Защита на случай, если menuBar не существует
 
-        # 1. Отменить все изменения
-        action_revert = QAction("Отменить все изменения", self)
-        action_revert.triggered.connect(self.action_revert_all_changes)
-        commands_menu.addAction(action_revert)
+        commands_menu = menu.addMenu("Команды")
 
-        # 2. Удалить все помеченные файлы
-        action_delete = QAction("Удалить все помеченные файлы", self)
-        action_delete.triggered.connect(self.action_delete_marked_files)
-        if self.readonly:
-            action_delete.setEnabled(False)
-        commands_menu.addAction(action_delete)
+        if commands_menu:
+            # 1. Отменить все изменения
+            action_revert = QAction("Отменить все изменения", self)
+            action_revert.triggered.connect(self.action_revert_all_changes)
+            commands_menu.addAction(action_revert)
 
-        commands_menu.addSeparator()
+            # 2. Удалить все помеченные файлы
+            action_delete = QAction("Удалить все помеченные файлы", self)
+            action_delete.triggered.connect(self.action_delete_marked_files)
+            if self.readonly:
+                action_delete.setEnabled(False)
+            commands_menu.addAction(action_delete)
 
-        # 3. Закрыть
-        action_close = QAction("Закрыть", self)
-        action_close.triggered.connect(self.close)
-        commands_menu.addAction(action_close)
+            commands_menu.addSeparator()
+
+            # 3. Закрыть
+            action_close = QAction("Закрыть", self)
+            action_close.triggered.connect(self.close)
+            commands_menu.addAction(action_close)
 
     def load_clusters(self) -> None:
         """Загружает из БД список кластеров, требующих разбора."""
@@ -231,29 +284,28 @@ class MainWindow(QMainWindow):
             container = QWidget()
             vbox = QVBoxLayout(container)
 
-            lbl_img = QLabel("Загрузка...")
+            lbl_img = ImageLabel(record_id=img_rec.id, parent_window=self)
             lbl_img.setFixedSize(300, 300)
             lbl_img.setStyleSheet("border: 1px solid gray;")
             lbl_img.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            lbl_img.setText("Загрузка...")
 
             size_kb = (img_rec.size_bytes or 0) / 1024
             lbl_info = QLabel(f"{Path(str(img_rec.path)).name}\n{size_kb:.1f} КБ")
 
-            btn_del = QPushButton("Пометить к удалению")
-            btn_del.setCheckable(True)
-            if self.readonly:
-                btn_del.setEnabled(False)
-
             vbox.addWidget(lbl_img)
             vbox.addWidget(lbl_info)
-            vbox.addWidget(btn_del)
+
+            # Кнопку больше не создаем, но оставим место для возможного возврата
+            # vbox.addWidget(btn_del)
 
             self.grid_layout.addWidget(container, i // 3, i % 3)
 
             # Сохраняем ссылки для последующей логики
             container.setProperty("rec_id", img_rec.id)
             container.setProperty("img_label", lbl_img)
-            container.setProperty("del_btn", btn_del)
+
+            self.update_image_style(img_rec)
 
             load_queue.append((i, img_rec.path))
 
@@ -273,6 +325,27 @@ class MainWindow(QMainWindow):
                 if isinstance(lbl, QLabel):
                     lbl.setPixmap(pixmap)
                     lbl.setText("")
+
+    def update_image_style(self, record: ImageRecord) -> None:
+        """Обновляет стиль виджета изображения в зависимости от его статуса."""
+        for i in range(self.grid_layout.count()):
+            item = self.grid_layout.itemAt(i)
+            if not item:
+                continue
+
+            container = item.widget()
+            if container and container.property("rec_id") == record.id:
+                lbl = container.property("img_label")
+                if isinstance(lbl, ImageLabel):
+                    if record.to_delete:
+                        # Красная рамка, если помечено к удалению
+                        lbl.setStyleSheet(
+                            "border: 2px solid red; background-color: rgba(255, 0, 0, 0.1);"
+                        )
+                    else:
+                        # Серая рамка по умолчанию
+                        lbl.setStyleSheet("border: 1px solid gray;")
+                break
 
     def action_keep_first(self) -> None:
         """
@@ -362,6 +435,45 @@ class MainWindow(QMainWindow):
         self.btn_keep_first.setEnabled(False)
         self.btn_ignore.setEnabled(False)
         self.btn_delete_all.setEnabled(False)
+
+    def mark_for_deletion(self, record_id: int) -> None:
+        """Помечает одно изображение к удалению."""
+        record = self.session.get(ImageRecord, record_id)
+        if record:
+            record.to_delete = True
+            self.session.commit()
+            print(f"Помечено к удалению: {record.path}")
+            self.update_image_style(record)
+
+    def unmark_for_deletion(self, record_id: int) -> None:
+        """Снимает с изображения пометку к удалению."""
+        record = self.session.get(ImageRecord, record_id)
+        if record:
+            record.to_delete = False
+            self.session.commit()
+            print(f"Снята пометка с: {record.path}")
+            self.update_image_style(record)
+
+    def keep_this_delete_others(self, record_to_keep_id: int) -> None:
+        """Оставляет выбранное изображение, остальные в кластере помечает к удалению."""
+        if self.current_cluster_id is None:
+            return
+
+        for img in self.cluster_images:
+            if img.id == record_to_keep_id:
+                img.to_delete = False
+            else:
+                img.to_delete = True
+                print(f"Помечено к удалению: {img.path}")
+            img.reviewed = True  # Помечаем как просмотренное
+
+        self.session.commit()
+
+        # Обновляем стили всех изображений в кластере
+        for img in self.cluster_images:
+            self.update_image_style(img)
+
+        self.remove_current_cluster_from_list()
 
     def action_revert_all_changes(self) -> None:
         """Отменяет все пометки `to_delete` во всей базе."""
