@@ -73,7 +73,7 @@ def review(
             "--read-only",
             help="Запустить в режиме 'только для чтения' или разрешить изменения.",
             is_flag=True,
-            flag_value=True
+            flag_value=True,
         ),
     ] = False,
 ) -> None:

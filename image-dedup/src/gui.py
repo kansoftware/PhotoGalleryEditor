@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMainWindow,
+    QMenuBar,
     QMessageBox,
     QPushButton,
     QScrollArea,
@@ -96,7 +97,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("Разбор дубликатов изображений")
         self.resize(1200, 800)
-        
+
         self.readonly = readonly
         if self.readonly:
             print("readonly mode")
@@ -116,7 +117,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QHBoxLayout(central_widget)
 
-        self.setMenuBar(self.menuBar()) # Создаем menuBar
+        # Этот вызов был удален, но он нужен. Восстановим его в правильном виде.
+        self.setMenuBar(QMenuBar(self))
 
         # Панель слева: Список кластеров
         left_layout = QVBoxLayout()
@@ -134,13 +136,17 @@ class MainWindow(QMainWindow):
         self.btn_keep_first.clicked.connect(self.action_keep_first)
         self.btn_ignore = QPushButton("Игнорировать (отметить как просмотрено)")
         self.btn_ignore.clicked.connect(self.action_ignore)
+        self.btn_delete_all = QPushButton("Удалить все")
+        self.btn_delete_all.clicked.connect(self.action_delete_all)
 
         action_layout.addWidget(self.btn_keep_first)
         action_layout.addWidget(self.btn_ignore)
+        action_layout.addWidget(self.btn_delete_all)
 
         # Деактивируем кнопки до выбора кластера
         self.btn_keep_first.setEnabled(False)
         self.btn_ignore.setEnabled(False)
+        self.btn_delete_all.setEnabled(False)
         right_layout.addLayout(action_layout)
 
         # Область прокрутки для изображений
@@ -156,8 +162,7 @@ class MainWindow(QMainWindow):
 
     def init_menu(self) -> None:
         """Инициализирует меню приложения."""
-        menu_bar = self.menuBar()
-        commands_menu = menu_bar.addMenu("Команды")
+        commands_menu = self.menuBar().addMenu("Команды")
 
         # 1. Отменить все изменения
         action_revert = QAction("Отменить все изменения", self)
@@ -177,7 +182,7 @@ class MainWindow(QMainWindow):
         action_close = QAction("Закрыть", self)
         action_close.triggered.connect(self.close)
         commands_menu.addAction(action_close)
- 
+
     def load_clusters(self) -> None:
         """Загружает из БД список кластеров, требующих разбора."""
         stmt = (
@@ -202,6 +207,7 @@ class MainWindow(QMainWindow):
         if not self.readonly:
             self.btn_keep_first.setEnabled(True)
             self.btn_ignore.setEnabled(True)
+            self.btn_delete_all.setEnabled(True)
 
     def load_cluster_images(self, cluster_id: int) -> None:
         """Загружает и отображает изображения для выбранного кластера."""
@@ -214,9 +220,7 @@ class MainWindow(QMainWindow):
                     widget.setParent(None)
 
         stmt = (
-            select(ImageRecord)
-            .where(ImageRecord.cluster_id == cluster_id)
-            .order_by(ImageRecord.id)
+            select(ImageRecord).where(ImageRecord.cluster_id == cluster_id).order_by(ImageRecord.id)
         )
         self.cluster_images = list(self.session.execute(stmt).scalars().all())
 
@@ -307,6 +311,36 @@ class MainWindow(QMainWindow):
         self.session.commit()
         self.remove_current_cluster_from_list()
 
+    def action_delete_all(self) -> None:
+        """
+        Обрабатывает действие "Удалить все".
+
+        Все изображения в кластере помечаются к удалению (`to_delete=True`).
+        Кластер помечается как просмотренный (`reviewed=True`).
+        """
+        if self.current_cluster_id is None:
+            return
+
+        # Запрашиваем подтверждение у пользователя
+        reply = QMessageBox.question(
+            self,
+            "Подтверждение",
+            "Вы уверены, что хотите пометить ВСЕ изображения в этом кластере к удалению?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+
+        if reply == QMessageBox.StandardButton.No:
+            return
+
+        for img in self.cluster_images:
+            img.reviewed = True
+            img.to_delete = True
+            print(f"Помечено к удалению: {img.path}")
+
+        self.session.commit()
+        self.remove_current_cluster_from_list()
+
     def remove_current_cluster_from_list(self) -> None:
         """
         Удаляет текущий кластер из списка и очищает сетку.
@@ -327,6 +361,7 @@ class MainWindow(QMainWindow):
         # Деактивируем кнопки после обработки
         self.btn_keep_first.setEnabled(False)
         self.btn_ignore.setEnabled(False)
+        self.btn_delete_all.setEnabled(False)
 
     def action_revert_all_changes(self) -> None:
         """Отменяет все пометки `to_delete` во всей базе."""
@@ -384,17 +419,17 @@ class MainWindow(QMainWindow):
                         deleted_count += 1
                 except Exception as e:
                     errors.append(f"Не удалось переименовать {rec.path}: {e}")
-            
+
             self.session.commit()
-            
+
             msg = f"Переименовано {deleted_count} файлов."
             if errors:
                 msg += "\n\nОшибки:\n" + "\n".join(errors)
-            
-            QMessageBox.information(self, "Отчет", msg)
-            self.load_clusters() # Обновляем список кластеров
 
- 
+            QMessageBox.information(self, "Отчет", msg)
+            self.load_clusters()  # Обновляем список кластеров
+
+
 def run_gui(readonly: bool) -> None:
     """
     Запускает GUI-приложение для разбора дубликатов.

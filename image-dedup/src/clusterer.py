@@ -10,6 +10,7 @@ from src.db import ImageRecord, SessionLocal
 
 logger = logging.getLogger(__name__)
 
+
 def cluster_images() -> None:
     """
     Выполняет кластеризацию изображений на основе их эмбеддингов.

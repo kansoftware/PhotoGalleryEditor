@@ -21,10 +21,7 @@ def setup_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        handlers=[
-            logging.FileHandler(settings.LOG_FILE),
-            logging.StreamHandler()
-        ]
+        handlers=[logging.FileHandler(settings.LOG_FILE), logging.StreamHandler()],
     )
 
 
@@ -64,4 +61,4 @@ def is_image_file(path: Path) -> bool:
         True, если расширение файла соответствует одному из поддерживаемых
         форматов изображений, иначе False.
     """
-    return path.suffix.lower() in {'.jpg', '.jpeg'}
+    return path.suffix.lower() in {".jpg", ".jpeg"}

@@ -29,9 +29,7 @@ class ImageRecord(Base):
     to_delete: Mapped[bool] = mapped_column(default=False)
 
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        default=datetime.utcnow, onupdate=datetime.utcnow
-    )
+    updated_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Индекс для быстрого поиска по вектору (IVFFlat или HNSW)
     # Для <100k строк можно обойтись без индекса или добавить позже.

@@ -6,7 +6,8 @@ from src.utils import get_file_hash, is_image_file
 def test_is_image_file():
     assert is_image_file(Path("test.jpg")) is True
     assert is_image_file(Path("TEST.JPEG")) is True
-    assert is_image_file(Path("test.png")) is False # Мы договорились только jpg
+    assert is_image_file(Path("test.png")) is False  # Мы договорились только jpg
+
 
 def test_file_hash(tmp_path):
     p = tmp_path / "test.txt"

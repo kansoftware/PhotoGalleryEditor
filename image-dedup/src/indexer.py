@@ -195,7 +195,7 @@ def index_images(root_dir: Path, limit: int = 0, force: bool = False) -> None:
                     record.file_hash = file_hash
                     record.embedding = features_cpu[i].tolist()
                     record.reviewed = False
-                    record.cluster_id = None # Сбрасываем кластер при переиндексации
+                    record.cluster_id = None  # Сбрасываем кластер при переиндексации
                     record.to_delete = False
 
                 session.commit()
