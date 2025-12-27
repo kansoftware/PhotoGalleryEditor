@@ -20,6 +20,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QAction, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
+    QDialog,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -33,7 +34,6 @@ from PyQt6.QtWidgets import (
     QScrollArea,
     QVBoxLayout,
     QWidget,
-    QDialog,
 )
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
@@ -102,7 +102,6 @@ class ImageViewer(QDialog):
         if self.pixmap.isNull():
             self.image_label.setText("Не удалось загрузить изображение.")
         else:
-            # Начальный размер
             # Начальный размер с ограничением
             initial_size = self.pixmap.size()
             if max(initial_size.width(), initial_size.height()) > 900:
