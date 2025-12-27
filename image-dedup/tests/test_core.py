@@ -1,6 +1,7 @@
-import pytest
 from pathlib import Path
-from src.utils import is_image_file, get_file_hash
+
+from src.utils import get_file_hash, is_image_file
+
 
 def test_is_image_file():
     assert is_image_file(Path("test.jpg")) is True

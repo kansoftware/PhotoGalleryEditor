@@ -1,6 +1,7 @@
-import os
-from pydantic_settings import BaseSettings
 from pathlib import Path
+
+from pydantic_settings import BaseSettings
+
 
 class Settings(BaseSettings):
     # DB
@@ -13,6 +14,7 @@ class Settings(BaseSettings):
     CLIP_PRETRAINED: str = "webli"
     BATCH_SIZE: int = 32  # Подбирать под VRAM. 64 ок для 8GB VRAM
     DEVICE: str = "cuda" # или cpu
+    NUM_WORKERS: int = 4  # Кол-во воркеров для DataLoader
     
     # Clustering
     SIMILARITY_THRESHOLD: float = 0.95 # Косинусное сходство (0..1)
@@ -21,6 +23,9 @@ class Settings(BaseSettings):
     LOG_FILE: Path = Path("app.log")
     
     class Config:
+        """Pydantic model configuration."""
+
         env_file = ".env"
+
 
 settings = Settings()

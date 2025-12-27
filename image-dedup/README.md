@@ -16,11 +16,12 @@ Production-ready прототип для поиска и группировки 
    git clone https://github.com/your-repo/image-dedup.git
    cd image-dedup
    
-   # Установка Poetry
-   sudo apt update && sudo apt install -y python3-poetry
+   # Создание и активация виртуального окружения
+   python3 -m venv .venv
+   source .venv/bin/activate
    
    # Установка зависимостей
-   poetry install
+   pip install -r requirements.txt
    ```
 
 2. **Запуск Базы Данных:**
@@ -31,7 +32,7 @@ Production-ready прототип для поиска и группировки 
 
 3. **Инициализация схемы БД:**
    ```bash
-   poetry run python -m src.main init
+   python -m src.main init
    ```
 
 ## Использование
@@ -39,7 +40,7 @@ Production-ready прототип для поиска и группировки 
 ### 1. Индексация (Поиск и расчет эмбеддингов)
 Сканирует папку рекурсивно, находит JPG, считает векторы на GPU.
 ```bash
-poetry run python -m src.main index /path/to/your/images --limit 1000
+python -m src.main index /path/to/your/images --limit 1000
 ```
 *Опции:*
 - `--limit N`: обработать только N файлов.
@@ -48,13 +49,13 @@ poetry run python -m src.main index /path/to/your/images --limit 1000
 ### 2. Кластеризация
 Группирует похожие изображения (Cosine Similarity > 0.92).
 ```bash
-poetry run python -m src.main cluster
+python -m src.main cluster
 ```
 
 ### 3. Ручной разбор (GUI)
 Запускает графический интерфейс для просмотра групп.
 ```bash
-poetry run python -m src.main review
+python -m src.main review
 ```
 *В GUI:*
 - Слева список групп.
@@ -71,5 +72,5 @@ SIMILARITY_THRESHOLD=0.95
 
 ## Тесты
 ```bash
-poetry run pytest
+pytest
 ```
