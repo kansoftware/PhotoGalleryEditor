@@ -134,10 +134,10 @@ mypy src
 # source .venv/bin/activate
 
 # Запуск всех тестов
-pytest
+PYTHONPATH=. pytest
 
-# Запуск тестов с отчетом о покрытии
-pytest --cov=src --cov-report=term-missing
+# Запуск тестов с отчетом о покрытии и проверкой минимального порога
+PYTHONPATH=. pytest --cov=src --cov-report=term-missing --cov-fail-under=80
 ```
 
 ## 5. Схема Рабочего Процесса
@@ -145,18 +145,18 @@ pytest --cov=src --cov-report=term-missing
 Стандартный процесс работы с утилитой выглядит следующим образом:
 
 1.  **Инициализация (однократно):**
-    -   Запустите `python src/main.py init` для создания таблиц в базе данных.
+    -   Запустите `python -m src/main.py init` для создания таблиц в базе данных.
 
 2.  **Индексация:**
-    -   Запустите `python src/main.py index /path/to/your/images`.
+    -   Запустите `python -m src/main.py index /path/to/your/images`.
     -   Программа просканирует директорию, вычислит эмбеддинги для новых/измененных изображений и сохранит их в БД.
 
 3.  **Кластеризация:**
-    -   Запустите `python src/main.py cluster`.
+    -   Запустите `python -m src/main.py cluster`.
     -   Утилита найдет группы похожих изображений и обновит поле `cluster_id` в базе данных.
 
 4.  **Ручной разбор:**
-    -   Запустите `python src/main.py review`.
+    -   Запустите `python -m src/main.py review`.
     -   В открывшемся GUI просмотрите предложенные кластеры и отметьте дубликаты для удаления.
 
 5.  **(Опционально) Удаление:**

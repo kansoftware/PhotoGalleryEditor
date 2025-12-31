@@ -39,7 +39,10 @@ def init() -> None:
 def index(
     path: Annotated[Path, typer.Argument(help="Путь к папке с изображениями.")],
     limit: Annotated[
-        int, typer.Option("--limit", help="Макс. кол-во изображений для обработки (0 = все)")
+        int,
+        typer.Option(
+            "--limit", help="Макс. кол-во изображений для обработки (0 = все)"
+        ),
     ] = 0,
     force: Annotated[
         bool, typer.Option("--force", help="Принудительно переиндексировать все файлы")

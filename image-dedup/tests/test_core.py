@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.utils import get_file_hash, is_image_file
+from src.utils import get_file_hash, is_image_file, setup_logging
 
 
 def test_is_image_file():
@@ -15,3 +15,11 @@ def test_file_hash(tmp_path):
     # sha256 of "hello world"
     expected = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
     assert get_file_hash(p) == expected
+
+
+def test_file_hash_not_found():
+    assert get_file_hash(Path("non_existent_file.txt")) == ""
+
+
+def test_setup_logging():
+    setup_logging()

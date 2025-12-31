@@ -22,10 +22,9 @@ class Settings(BaseSettings):
     # Paths
     LOG_FILE: Path = Path("app.log")
 
-    class Config:
-        """Pydantic model configuration."""
-
-        env_file = ".env"
+    model_config = {
+        "env_file": ".env"
+    }
 
 
 settings = Settings()

@@ -45,7 +45,9 @@ def safe_move_file(source_path, dest_dir):
                 new_dest_path = os.path.join(dest_dir, new_lfn)
                 if not os.path.exists(new_dest_path):
                     os.rename(source_path, new_dest_path)
-                    print(f"File '{lfn}' renamed to '{new_lfn}' and moved to '{dest_dir}'")
+                    print(
+                        f"File '{lfn}' renamed to '{new_lfn}' and moved to '{dest_dir}'"
+                    )
                     break
                 i += 1
     else:
@@ -55,14 +57,14 @@ def safe_move_file(source_path, dest_dir):
 
 
 def getjpg(j):
-    f = open(j, 'rb')
+    f = open(j, "rb")
     # Return Exif tags
     tags = exifread.process_file(f)
-    if 'EXIF DateTimeOriginal' in tags:
-        d = tags['EXIF DateTimeOriginal']
-        return datetime.datetime.strptime(str(d), '%Y:%m:%d %H:%M:%S').date()
+    if "EXIF DateTimeOriginal" in tags:
+        d = tags["EXIF DateTimeOriginal"]
+        return datetime.datetime.strptime(str(d), "%Y:%m:%d %H:%M:%S").date()
     else:
-        #print(tags)
+        # print(tags)
         return datetime.datetime.fromtimestamp(os.path.getmtime(j)).date()
 
 
@@ -73,37 +75,50 @@ def getmov(m):
     """
     try:
         cmd = [
-            'ffprobe',
-            '-v', 'quiet',
-            '-print_format', 'json',
-            '-show_format',
-            '-show_streams',
-            m
+            "ffprobe",
+            "-v",
+            "quiet",
+            "-print_format",
+            "json",
+            "-show_format",
+            "-show_streams",
+            m,
         ]
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True)
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, text=True
+        )
         data = json.loads(result.stdout)
 
         creation_time_str = None
-        if 'format' in data and 'tags' in data['format'] and 'creation_time' in data['format']['tags']:
-            creation_time_str = data['format']['tags']['creation_time']
-        
+        if (
+            "format" in data
+            and "tags" in data["format"]
+            and "creation_time" in data["format"]["tags"]
+        ):
+            creation_time_str = data["format"]["tags"]["creation_time"]
+
         # Иногда дата находится в потоке, а не в формате
-        if not creation_time_str and 'streams' in data:
-            for stream in data['streams']:
-                if 'tags' in stream and 'creation_time' in stream['tags']:
-                    creation_time_str = stream['tags']['creation_time']
+        if not creation_time_str and "streams" in data:
+            for stream in data["streams"]:
+                if "tags" in stream and "creation_time" in stream["tags"]:
+                    creation_time_str = stream["tags"]["creation_time"]
                     break
 
         if creation_time_str:
             # ffprobe возвращает время в UTC (с 'Z' на конце)
-            if creation_time_str.endswith('Z'):
-                creation_time_str = creation_time_str[:-1] + '+00:00'
+            if creation_time_str.endswith("Z"):
+                creation_time_str = creation_time_str[:-1] + "+00:00"
             return datetime.datetime.fromisoformat(creation_time_str).date()
 
-    except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError, KeyError):
+    except (
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+        json.JSONDecodeError,
+        KeyError,
+    ):
         # Если ffprobe не удался или не нашел дату, используем дату изменения
         pass
-    
+
     return datetime.datetime.fromtimestamp(os.path.getmtime(m)).date()
 
 
@@ -113,13 +128,27 @@ def getmov(m):
 # print(getmov(m))
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Организация фотографий и видео по датам EXIF/создания.")
-    parser.add_argument("-R", "--recursive", action="store_true",
-                        help="Рекурсивный обход исходной папки.")
-    parser.add_argument("--load", type=str, default=".",
-                        help="Путь к папке с исходными файлами (по умолчанию: текущая директория).")
-    parser.add_argument("--save", type=str, default="",
-                        help="Путь к папке для сохранения отсортированных файлов (по умолчанию: внутри --load).")
+    parser = argparse.ArgumentParser(
+        description="Организация фотографий и видео по датам EXIF/создания."
+    )
+    parser.add_argument(
+        "-R",
+        "--recursive",
+        action="store_true",
+        help="Рекурсивный обход исходной папки.",
+    )
+    parser.add_argument(
+        "--load",
+        type=str,
+        default=".",
+        help="Путь к папке с исходными файлами (по умолчанию: текущая директория).",
+    )
+    parser.add_argument(
+        "--save",
+        type=str,
+        default="",
+        help="Путь к папке для сохранения отсортированных файлов (по умолчанию: внутри --load).",
+    )
 
     args = parser.parse_args()
 
@@ -138,7 +167,11 @@ if __name__ == "__main__":
             for file in files:
                 files_to_process.append(os.path.join(root, file))
     else:
-        files_to_process = [os.path.join(source_path, f) for f in os.listdir(source_path) if os.path.isfile(os.path.join(source_path, f))]
+        files_to_process = [
+            os.path.join(source_path, f)
+            for f in os.listdir(source_path)
+            if os.path.isfile(os.path.join(source_path, f))
+        ]
 
     for file_path in files_to_process:
         lfn = os.path.basename(file_path)
@@ -149,7 +182,7 @@ if __name__ == "__main__":
             elif file_extension.endswith((".mov", ".mp4")):
                 d = str(getmov(file_path))
             else:
-                continue # Пропускаем файлы с неподдерживаемыми расширениями
+                continue  # Пропускаем файлы с неподдерживаемыми расширениями
 
             target_dir = os.path.join(save_path, d)
             print(f"Processing: {lfn} -> {target_dir}")

@@ -137,7 +137,14 @@ class ImageLabel(QLabel):
     в `MainWindow` для отображения меню.
     """
 
-    def __init__(self, record_id: int, image_path: str, parent_window: "MainWindow", *args, **kwargs):
+    def __init__(
+        self,
+        record_id: int,
+        image_path: str,
+        parent_window: "MainWindow",
+        *args,
+        **kwargs,
+    ):
         super().__init__(*args, **kwargs)
         self.record_id = record_id
         self.image_path = image_path
@@ -336,7 +343,9 @@ class MainWindow(QMainWindow):
                     widget.setParent(None)
 
         stmt = (
-            select(ImageRecord).where(ImageRecord.cluster_id == cluster_id).order_by(ImageRecord.id)
+            select(ImageRecord)
+            .where(ImageRecord.cluster_id == cluster_id)
+            .order_by(ImageRecord.id)
         )
         self.cluster_images = list(self.session.execute(stmt).scalars().all())
 
@@ -569,7 +578,9 @@ class MainWindow(QMainWindow):
         records_to_delete = list(self.session.execute(stmt).scalars().all())
 
         if not records_to_delete:
-            QMessageBox.information(self, "Нечего удалять", "Нет файлов, помеченных к удалению.")
+            QMessageBox.information(
+                self, "Нечего удалять", "Нет файлов, помеченных к удалению."
+            )
             return
 
         reply = QMessageBox.question(
