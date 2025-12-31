@@ -22,7 +22,7 @@ class ImageRecord(Base):
     mtime: Mapped[float] = mapped_column()
 
     # Размерность зависит от модели. ViT-B-16-SigLIP = 768
-    embedding: Mapped[Any] = mapped_column(Vector(768))
+    embedding: Mapped[Any] = mapped_column(Vector(768), nullable=True)
 
     cluster_id: Mapped[int | None] = mapped_column(index=True, nullable=True)
     reviewed: Mapped[bool] = mapped_column(default=False)

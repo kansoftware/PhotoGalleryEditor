@@ -23,8 +23,4 @@ tqdm>=4.66.0
 # Зависимости из exifreader
 ExifRead==3.5.1
 
-# Зависимости для тестов
-pytest>=7.4.0
-pytest-cov>=4.1.0
-ruff>=0.1.6
-mypy>=1.7.0
+# Зависимости для тестов находятся в requirements-dev.txt
