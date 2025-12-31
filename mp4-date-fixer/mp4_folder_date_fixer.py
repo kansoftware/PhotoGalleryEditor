@@ -17,6 +17,7 @@ from typing import Optional, Dict, Any
 # --- Конфигурация ---
 TARGET_TIME = "12:00:00"
 DEFAULT_TZ = "Europe/Moscow"
+BACKUP_SUFFIX = "_original"
 # Теги для записи (Вариант А: Максимальная совместимость)
 # QuickTime стандарт (UTC) + Apple Keys (с зоной)
 TARGET_TAGS = [
@@ -124,21 +125,21 @@ class Mp4DateFixer:
             return True  # Тега нет, надо писать
 
         current_val_str = current_meta[PRIMARY_CHECK_TAG]
-        # Exiftool JSON format usually: "YYYY:MM:DD HH:MM:SS+HH:MM" or similar
-        # Попробуем распарсить дату от exiftool
-        # Упрощение: Exiftool с -api QuickTimeUTC возвращает локальное время системы или файла.
-        # Надежнее сравнить строки, приведя target к формату Exiftool
-
-        # Формат Exiftool по умолчанию: "YYYY:MM:DD HH:MM:SS±HH:MM"
-        target_str = target_dt.strftime("%Y:%m:%d %H:%M:%S")
-
-        # Проверка: содержит ли текущее значение нашу целевую дату/время
-        # Мы игнорируем смещение в строке сравнения, если оно совпадает по сути,
-        # но для простоты: если строка начинается с "YYYY:MM:DD HH:MM:SS", считаем ОК.
-        if current_val_str.startswith(target_str):
-            return False
-
-        return True
+        # Более надежная проверка дат
+        # Exiftool возвращает дату в формате "YYYY:MM:DD HH:MM:SS" или "YYYY:MM:DD HH:MM:SS+ZZ:ZZ"
+        # Мы отсекаем возможную таймзону для упрощенного парсинга
+        try:
+            current_dt_naive = datetime.strptime(
+                current_val_str[:19], "%Y:%m:%d %H:%M:%S"
+            )
+            # Делаем aware-объект с той же зоной, что и у target_dt
+            current_dt = current_dt_naive.replace(tzinfo=target_dt.tzinfo)
+            # Сравниваем объекты datetime напрямую
+            return current_dt != target_dt
+        except (ValueError, TypeError):
+            # Если не удалось распарсить, считаем, что нужно обновить
+            logger.debug(f"Could not parse date '{current_val_str}'. Update needed.")
+            return True
 
     def update_file(self, file_path: Path, target_dt: datetime):
         """
@@ -146,10 +147,9 @@ class Mp4DateFixer:
         """
         # Формируем строку даты для Exiftool: "YYYY:MM:DD HH:MM:SS+03:00"
         # Это важно для Keys:CreationDate и корректного пересчета в UTC для QuickTime тегов
-        exif_date_str = target_dt.strftime("%Y:%m:%d %H:%M:%S%z")
-        # Вставляем двоеточие в смещение таймзоны (+0300 -> +03:00) для совместимости с ISO
-        if exif_date_str[-5] != ":" and len(exif_date_str) > 5:
-            exif_date_str = exif_date_str[:-2] + ":" + exif_date_str[-2:]
+        # Формируем строку с двоеточием в таймзоне, как требует стандарт ISO 8601
+        # и как лучше всего понимает Exiftool.
+        exif_date_str = target_dt.isoformat(sep=" ", timespec="seconds")
 
         logger.info(f"Processing: {file_path} -> Target: {exif_date_str}")
 
@@ -180,10 +180,10 @@ class Mp4DateFixer:
         # 2. Verification
         if self.verify_update(file_path, target_dt):
             # Success: Delete backup
-            backup_file = file_path.with_name(file_path.name + "_original")
+            backup_file = file_path.with_suffix(file_path.suffix + BACKUP_SUFFIX)
             if backup_file.exists():
                 try:
-                    os.unlink(backup_file)
+                    backup_file.unlink()
                     logger.debug(f"Verification passed. Backup deleted: {backup_file}")
                 except OSError as e:
                     logger.warning(f"Could not delete backup {backup_file}: {e}")
@@ -213,7 +213,7 @@ class Mp4DateFixer:
         return not self.is_update_needed(meta, target_dt)
 
     def restore_backup(self, file_path: Path):
-        backup_file = file_path.with_name(file_path.name + "_original")
+        backup_file = file_path.with_suffix(file_path.suffix + BACKUP_SUFFIX)
         if backup_file.exists():
             try:
                 # На Linux rename атомарен и заменит испорченный файл
